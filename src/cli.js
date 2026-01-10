@@ -21,7 +21,7 @@ Options:
   --engine <playwright|puppeteer>  Browser automation engine (default: playwright)
   --headed                    Launch with a visible browser window (default)
   --headless                  Launch without a visible browser window
-  --ensure-engine             If the selected engine isn't installed, prompt to install it
+  --ensure-engine             If the selected engine isn't installed, prompt to install it (and Playwright browsers)
   --help                      Show help
 `;
 
@@ -153,6 +153,17 @@ function isMissingEngineError(err, engine) {
 	return message.includes(`Cannot find package '${engine}'`) || message.includes(`Failed to import '${engine}'`);
 }
 
+function isPlaywrightMissingBrowserError(err) {
+	const message = err instanceof Error ? err.message : String(err);
+	const m = message.toLowerCase();
+	return (
+		m.includes("playwright") &&
+		(m.includes("executable doesn't exist") ||
+			m.includes("executable doesnt exist") ||
+			m.includes("playwright install"))
+	);
+}
+
 function commandExists(cmd) {
 	const r = spawnSync(cmd, ["--version"], { stdio: "ignore" });
 	return r.status === 0;
@@ -180,12 +191,22 @@ async function promptYesNo(question, defaultNo = true) {
 	}
 }
 
-function runInstall(pm, engine) {
+function runInstallEngine(pm, engine) {
 	if (pm === "pnpm") {
 		return spawnSync("pnpm", ["add", engine], { stdio: "inherit" });
 	}
 	if (pm === "npm") {
 		return spawnSync("npm", ["i", engine], { stdio: "inherit" });
+	}
+	throw new Error(`Unknown package manager: ${pm}`);
+}
+
+function runInstallPlaywrightChromium(pm) {
+	if (pm === "pnpm") {
+		return spawnSync("pnpm", ["exec", "playwright", "install", "chromium"], { stdio: "inherit" });
+	}
+	if (pm === "npm") {
+		return spawnSync("npx", ["playwright", "install", "chromium"], { stdio: "inherit" });
 	}
 	throw new Error(`Unknown package manager: ${pm}`);
 }
@@ -205,9 +226,46 @@ async function ensureEngineInstalled(engine) {
 		);
 	}
 
-	const result = runInstall(pm, engine);
+	const result = runInstallEngine(pm, engine);
 	if (result.status !== 0) {
 		throw new Error(`Failed to install '${engine}' (exit code ${result.status ?? "?"}).`);
+	}
+
+	if (engine === "playwright") {
+		const installBrowsers = await promptYesNo(
+			"[browser-keepalive] Install Playwright Chromium browser binaries too? (recommended)",
+			false
+		);
+		if (installBrowsers) {
+			const installResult = runInstallPlaywrightChromium(pm);
+			if (installResult.status !== 0) {
+				throw new Error(
+					`Playwright installed, but failed to install Chromium browser binaries (exit code ${installResult.status ?? "?"}).`
+				);
+			}
+		}
+	}
+}
+
+async function ensurePlaywrightBrowsersInstalled() {
+	const pm = pickPackageManager();
+	if (!pm) {
+		throw new Error(
+			"No supported package manager found. Install Playwright, then run `playwright install chromium` (via pnpm/npm)."
+		);
+	}
+
+	const ok = await promptYesNo(
+		"[browser-keepalive] Playwright is installed but browser binaries are missing. Run `playwright install chromium` now?",
+		true
+	);
+	if (!ok) {
+		throw new Error("Playwright browser binaries missing. Run `playwright install chromium` and retry.");
+	}
+
+	const installResult = runInstallPlaywrightChromium(pm);
+	if (installResult.status !== 0) {
+		throw new Error(`Failed to install Playwright Chromium browser binaries (exit code ${installResult.status ?? "?"}).`);
 	}
 }
 
@@ -215,12 +273,21 @@ async function launchWithOptionalEnsure({ engine, headless, ensureEngine }) {
 	try {
 		return await launchEngine(engine, { headless });
 	} catch (err) {
-		if (!ensureEngine || !isMissingEngineError(err, engine)) {
+		if (!ensureEngine) {
 			throw err;
 		}
 
-		await ensureEngineInstalled(engine);
-		return await launchEngine(engine, { headless });
+		if (isMissingEngineError(err, engine)) {
+			await ensureEngineInstalled(engine);
+			return await launchEngine(engine, { headless });
+		}
+
+		if (engine === "playwright" && isPlaywrightMissingBrowserError(err)) {
+			await ensurePlaywrightBrowsersInstalled();
+			return await launchEngine(engine, { headless });
+		}
+
+		throw err;
 	}
 }
 

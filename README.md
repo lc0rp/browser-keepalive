@@ -14,6 +14,9 @@ Install the engine you want:
 ```bash
 cd /data/projects/browser-keepalive
 pnpm add playwright
+# and for Playwright, install a browser binary:
+pnpm exec playwright install chromium
+
 # or
 pnpm add puppeteer
 ```
@@ -35,7 +38,7 @@ browser-keepalive --url https://example.com --interval 60 --engine playwright --
 - `--engine <playwright|puppeteer>` (default: `playwright`)
 - `--headed` visible browser window (default)
 - `--headless` no visible browser window
-- `--ensure-engine` if the selected engine isn’t installed, prompt to install it
+- `--ensure-engine` if the selected engine isn’t installed, prompt to install it (and for Playwright, optionally install Chromium too)
 
 ## Build
 
