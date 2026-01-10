@@ -1,0 +1,17 @@
+{
+  "name": "browser-keepalive",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "browser-keepalive": "./src/cli.js"
+  },
+  "scripts": {
+    "start": "node ./src/cli.js",
+    "build": "mkdir -p dist && esbuild ./src/cli.js --bundle --platform=node --format=esm --outfile=dist/cli.js --banner:js='#!/usr/bin/env node' --external:playwright --external:puppeteer && chmod +x dist/cli.js",
+    "lint": "node -c ./src/cli.js && node -c ./src/engines.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.2"
+  }
+}
