@@ -61,7 +61,7 @@ node src/cli.js https://example.com --auto-install -y
 | `--no-cache-bust` | Disable cache busting |
 | `--always-reset` | Always navigate to original URL instead of refreshing current page |
 | `--only-if-idle` | Wait for browser to be idle for the full interval before refreshing |
-| `-p, --cdp-port <port>` | Enable CDP((Chrome DevTools Protocol)[https://chromedevtools.github.io/devtools-protocol/]) on this port |
+| `-p, --cdp-port <port>` | Enable [Chrome DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/) (CDP) on this port |
 | `--auto-install` | Prompt to install engine/chromium browser, if not found |
 | `-y, --yes` | Auto-confirm prompts |
 | `-V, --version` | Show version |
