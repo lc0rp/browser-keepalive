@@ -1,5 +1,10 @@
 # browser-keepalive
 
+[![CI](https://github.com/lc0rp/browser-keepalive/actions/workflows/ci.yml/badge.svg)](https://github.com/lc0rp/browser-keepalive/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/lc0rp/browser-keepalive/branch/main/graph/badge.svg)](https://codecov.io/gh/lc0rp/browser-keepalive)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Launch a browser, load a URL, and periodically refresh it to keep it alive.
 
 ## Install
@@ -99,6 +104,19 @@ const browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
 import puppeteer from 'puppeteer';
 // Use the webSocketDebuggerUrl printed when keepalive starts
 const browser = await puppeteer.connect({ browserWSEndpoint: 'ws://127.0.0.1:9222/...' });
+```
+
+## Development
+
+```bash
+# Run tests
+pnpm test
+
+# Run tests with coverage
+pnpm test:coverage
+
+# Build bundled version
+pnpm build
 ```
 
 ## Requirements

@@ -9,6 +9,16 @@ import { dirname, join } from "node:path";
 
 import { Command } from "commander";
 import { launchEngine } from "./engines.js";
+import {
+	parseInterval,
+	validateEngine,
+	normalizePort,
+	stripQueryParam,
+	withCacheBuster,
+	sleep,
+	isMissingEngineError,
+	isPlaywrightMissingBrowserError,
+} from "./utils.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf-8"));
@@ -46,80 +56,23 @@ const opts = program.opts();
 const url = program.args[0];
 
 // Validate and normalize options
-const config = {
-	url: url,
-	intervalSeconds: parseInterval(opts.interval),
-	cacheBust: opts.cacheBust,
-	alwaysReset: opts.alwaysReset || false,
-	engine: validateEngine(opts.engine),
-	headless: opts.headless || false,
-	autoInstall: opts.autoInstall || false,
-	cdpPort: opts.cdpPort ? normalizePort(opts.cdpPort) : null,
-	onlyIfIdle: opts.onlyIfIdle || false,
-	yes: opts.yes || false,
-};
-
-function parseInterval(value) {
-	const n = Number(value);
-	if (!Number.isFinite(n) || n <= 0) {
-		console.error("Error: --interval must be a positive number of seconds");
-		process.exit(1);
-	}
-	return n;
-}
-
-function validateEngine(value) {
-	if (value !== "playwright" && value !== "puppeteer") {
-		console.error("Error: --engine must be 'playwright' or 'puppeteer'");
-		process.exit(1);
-	}
-	return value;
-}
-
-function normalizePort(value) {
-	const n = Number(value);
-	if (!Number.isInteger(n) || n <= 0 || n > 65535) {
-		console.error("Error: --cdp-port must be an integer between 1 and 65535");
-		process.exit(1);
-	}
-	return n;
-}
-
-function stripQueryParam(urlString, param) {
-	try {
-		const url = new URL(urlString);
-		url.searchParams.delete(param);
-		return url.toString();
-	} catch {
-		return urlString;
-	}
-}
-
-function withCacheBuster(urlString) {
-	const base = stripQueryParam(urlString, "_cb");
-	const url = new URL(base);
-	url.searchParams.set("_cb", `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`);
-	return url.toString();
-}
-
-function sleep(ms) {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function isMissingEngineError(err, engine) {
-	const message = err instanceof Error ? err.message : String(err);
-	return message.includes(`Cannot find package '${engine}'`) || message.includes(`Failed to import '${engine}'`);
-}
-
-function isPlaywrightMissingBrowserError(err) {
-	const message = err instanceof Error ? err.message : String(err);
-	const m = message.toLowerCase();
-	return (
-		m.includes("playwright") &&
-		(m.includes("executable doesn't exist") ||
-			m.includes("executable doesnt exist") ||
-			m.includes("playwright install"))
-	);
+let config;
+try {
+	config = {
+		url: url,
+		intervalSeconds: parseInterval(opts.interval),
+		cacheBust: opts.cacheBust,
+		alwaysReset: opts.alwaysReset || false,
+		engine: validateEngine(opts.engine),
+		headless: opts.headless || false,
+		autoInstall: opts.autoInstall || false,
+		cdpPort: opts.cdpPort ? normalizePort(opts.cdpPort) : null,
+		onlyIfIdle: opts.onlyIfIdle || false,
+		yes: opts.yes || false,
+	};
+} catch (err) {
+	console.error(`Error: ${err.message}`);
+	process.exit(1);
 }
 
 function commandExists(cmd) {
@@ -284,7 +237,7 @@ async function waitForIdle({ intervalMs, getLastActivityAt, stoppedRef }) {
 	}
 }
 
-async function waitForJson(url, timeoutMs) {
+async function waitForJson(urlString, timeoutMs) {
 	const startedAt = Date.now();
 	let lastErr;
 
@@ -293,7 +246,7 @@ async function waitForJson(url, timeoutMs) {
 			if (typeof fetch !== "function") {
 				throw new Error("global fetch() is not available (Node 18+ required)");
 			}
-			const res = await fetch(url, { headers: { accept: "application/json" } });
+			const res = await fetch(urlString, { headers: { accept: "application/json" } });
 			if (!res.ok) {
 				throw new Error(`HTTP ${res.status}`);
 			}
@@ -304,7 +257,7 @@ async function waitForJson(url, timeoutMs) {
 		}
 	}
 
-	throw lastErr ?? new Error(`Timed out fetching ${url}`);
+	throw lastErr ?? new Error(`Timed out fetching ${urlString}`);
 }
 
 async function printCdpEndpoints(cdpPort) {
