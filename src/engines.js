@@ -14,7 +14,7 @@ export function normalizePort(value) {
 	}
 	const n = Number(value);
 	if (!Number.isInteger(n) || n <= 0 || n > 65535) {
-		throw new Error(`Invalid CDP port: ${String(value)}`);
+		throw new Error("CDP port must be an integer between 1 and 65535");
 	}
 	return n;
 }

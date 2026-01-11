@@ -29,16 +29,17 @@ export function validateEngine(value) {
 }
 
 /**
- * Normalize and validate port number.
- * @param {string | number} value
- * @returns {number}
+ * Validate and normalize a URL string.
+ * Returns a normalized absolute URL (e.g. ensures trailing slash where applicable).
+ * @param {string} value
+ * @returns {string}
  */
-export function normalizePort(value) {
-	const n = Number(value);
-	if (!Number.isInteger(n) || n <= 0 || n > 65535) {
-		throw new Error("--cdp-port must be an integer between 1 and 65535");
+export function validateUrlString(value) {
+	try {
+		return new URL(value).toString();
+	} catch {
+		throw new Error("<url> must be a valid absolute URL (e.g. https://example.com)");
 	}
-	return n;
 }
 
 /**
@@ -59,14 +60,19 @@ export function stripQueryParam(urlString, param) {
 
 /**
  * Add a cache-busting query parameter to a URL.
+ * Returns the original string unchanged if the URL cannot be parsed.
  * @param {string} urlString
  * @returns {string}
  */
 export function withCacheBuster(urlString) {
 	const base = stripQueryParam(urlString, "_cb");
-	const url = new URL(base);
-	url.searchParams.set("_cb", `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`);
-	return url.toString();
+	try {
+		const url = new URL(base);
+		url.searchParams.set("_cb", `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`);
+		return url.toString();
+	} catch {
+		return urlString;
+	}
 }
 
 /**

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
 	parseInterval,
 	validateEngine,
-	normalizePort,
+	validateUrlString,
 	stripQueryParam,
 	withCacheBuster,
 	sleep,
@@ -61,38 +61,15 @@ describe("validateEngine", () => {
 	});
 });
 
-describe("normalizePort", () => {
-	it("parses valid port numbers", () => {
-		expect(normalizePort("8080")).toBe(8080);
-		expect(normalizePort("1")).toBe(1);
-		expect(normalizePort("65535")).toBe(65535);
-		expect(normalizePort("9222")).toBe(9222);
+describe("validateUrlString", () => {
+	it("accepts valid absolute URLs", () => {
+		expect(validateUrlString("https://example.com")).toBe("https://example.com/");
+		expect(validateUrlString("https://example.com/path?x=1")).toBe("https://example.com/path?x=1");
 	});
 
-	it("accepts numeric input", () => {
-		expect(normalizePort(8080)).toBe(8080);
-		expect(normalizePort(9222)).toBe(9222);
-	});
-
-	it("throws on zero", () => {
-		expect(() => normalizePort("0")).toThrow("--cdp-port must be an integer between 1 and 65535");
-	});
-
-	it("throws on negative numbers", () => {
-		expect(() => normalizePort("-1")).toThrow("--cdp-port must be an integer between 1 and 65535");
-	});
-
-	it("throws on ports > 65535", () => {
-		expect(() => normalizePort("65536")).toThrow("--cdp-port must be an integer between 1 and 65535");
-		expect(() => normalizePort("99999")).toThrow("--cdp-port must be an integer between 1 and 65535");
-	});
-
-	it("throws on non-integer values", () => {
-		expect(() => normalizePort("8080.5")).toThrow("--cdp-port must be an integer between 1 and 65535");
-	});
-
-	it("throws on non-numeric strings", () => {
-		expect(() => normalizePort("abc")).toThrow("--cdp-port must be an integer between 1 and 65535");
+	it("throws on invalid URLs", () => {
+		expect(() => validateUrlString("not-a-url")).toThrow("<url> must be a valid absolute URL");
+		expect(() => validateUrlString("")).toThrow("<url> must be a valid absolute URL");
 	});
 });
 
@@ -160,6 +137,10 @@ describe("withCacheBuster", () => {
 		const timestamp = Date.now().toString(36);
 		const random = (0.123456789).toString(36).slice(2, 6);
 		expect(result).toBe(`https://example.com/?_cb=${timestamp}${random}`);
+	});
+
+	it("returns original string for invalid URLs", () => {
+		expect(withCacheBuster("not-a-url")).toBe("not-a-url");
 	});
 });
 

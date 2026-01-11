@@ -27,23 +27,23 @@ describe("normalizePort", () => {
 	});
 
 	it("throws on zero", () => {
-		expect(() => normalizePort(0)).toThrow("Invalid CDP port: 0");
+		expect(() => normalizePort(0)).toThrow("CDP port must be an integer between 1 and 65535");
 	});
 
 	it("throws on negative", () => {
-		expect(() => normalizePort(-1)).toThrow("Invalid CDP port: -1");
+		expect(() => normalizePort(-1)).toThrow("CDP port must be an integer between 1 and 65535");
 	});
 
 	it("throws on > 65535", () => {
-		expect(() => normalizePort(65536)).toThrow("Invalid CDP port: 65536");
+		expect(() => normalizePort(65536)).toThrow("CDP port must be an integer between 1 and 65535");
 	});
 
 	it("throws on non-integer", () => {
-		expect(() => normalizePort(8080.5)).toThrow("Invalid CDP port: 8080.5");
+		expect(() => normalizePort(8080.5)).toThrow("CDP port must be an integer between 1 and 65535");
 	});
 
 	it("throws on NaN string", () => {
-		expect(() => normalizePort("abc")).toThrow("Invalid CDP port: abc");
+		expect(() => normalizePort("abc")).toThrow("CDP port must be an integer between 1 and 65535");
 	});
 });
 
@@ -331,7 +331,9 @@ describe("launchEngine", () => {
 	});
 
 	it("validates cdpPort before launching", async () => {
-		await expect(launchEngine("playwright", { cdpPort: 99999 })).rejects.toThrow("Invalid CDP port");
+		await expect(launchEngine("playwright", { cdpPort: 99999 })).rejects.toThrow(
+			"CDP port must be an integer between 1 and 65535"
+		);
 	});
 
 	it("launches playwright when engine is 'playwright'", async () => {

@@ -8,11 +8,11 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 import { Command } from "commander";
-import { launchEngine } from "./engines.js";
+import { launchEngine, normalizePort as normalizeCdpPort } from "./engines.js";
 import {
 	parseInterval,
 	validateEngine,
-	normalizePort,
+	validateUrlString,
 	stripQueryParam,
 	withCacheBuster,
 	sleep,
@@ -59,14 +59,14 @@ const url = program.args[0];
 let config;
 try {
 	config = {
-		url: url,
+		url: validateUrlString(url),
 		intervalSeconds: parseInterval(opts.interval),
 		cacheBust: opts.cacheBust,
 		alwaysReset: opts.alwaysReset || false,
 		engine: validateEngine(opts.engine),
 		headless: opts.headless || false,
 		autoInstall: opts.autoInstall || false,
-		cdpPort: opts.cdpPort ? normalizePort(opts.cdpPort) : null,
+		cdpPort: normalizeCdpPort(opts.cdpPort),
 		onlyIfIdle: opts.onlyIfIdle || false,
 		yes: opts.yes || false,
 	};

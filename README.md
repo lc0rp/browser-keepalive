@@ -53,7 +53,7 @@ node src/cli.js https://example.com --auto-install -y
 
 | Option | Description |
 |--------|-------------|
-| `<url>` | URL to load (**required**) |
+| `<url>` | Absolute URL to load (include `http://` or `https://`) (**required**) |
 | `-i, --interval <sec>` | Refresh interval in seconds (default: `60`) |
 | `--engine <name>` | `playwright` or `puppeteer` (default: `playwright`) |
 | `--headless` | Hide browser window |
