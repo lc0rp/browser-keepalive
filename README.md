@@ -7,14 +7,14 @@ Launch a browser, load a URL, and periodically refresh it to keep it alive.
 ```bash
 git clone https://github.com/lc0rp/browser-keepalive.git
 cd browser-keepalive
-npm install
+pnpm install
 
 # Install a browser engine (pick one):
-npm install playwright && npx playwright install chromium
-# or: npm install puppeteer
+pnpm install playwright && npx playwright install chromium
+# or: pnpm install puppeteer
 ```
 
-> **pnpm/yarn users:** substitute your preferred package manager.
+> **npm/yarn users:** substitute your preferred package manager.
 
 ## Usage
 
@@ -55,10 +55,10 @@ node src/cli.js https://example.com --auto-install -y
 | `--cache-bust` | Add `?_cb=...` query param each refresh (default: `true`) |
 | `--no-cache-bust` | Disable cache busting |
 | `--always-reset` | Always navigate to original URL instead of refreshing current page |
-| `--only-if-idle` | Wait for browser to be idle before refreshing |
-| `-p, --cdp-port <port>` | Enable Chrome DevTools Protocol on this port |
-| `--auto-install` | Prompt to install missing engine/browser |
-| `-y, --yes` | Auto-confirm prompts (for scripts) |
+| `--only-if-idle` | Wait for browser to be idle for the full interval before refreshing |
+| `-p, --cdp-port <port>` | Enable CDP((Chrome DevTools Protocol)[https://chromedevtools.github.io/devtools-protocol/]) on this port |
+| `--auto-install` | Prompt to install engine/chromium browser, if not found |
+| `-y, --yes` | Auto-confirm prompts |
 | `-V, --version` | Show version |
 | `-h, --help` | Show help |
 
@@ -68,18 +68,20 @@ The examples above use `node src/cli.js` directly. You can also:
 
 ```bash
 # Via npm/pnpm (uses package.json "bin" entry)
-npx browser-keepalive https://example.com
+pnpm exec browser-keepalive https://example.com
+# or: npx browser-keepalive https://example.com
 
 # Build a bundled version first
-npm run build
+pnpm run build
 node dist/cli.js https://example.com
+# or just: ./dist/cli.js https://example.com
 ```
 
-All three methods are equivalent — pick whichever you prefer.
+All methods are equivalent, pick whichever you prefer.
 
 ## CDP: Control the Browser From Another App
 
-CDP (Chrome DevTools Protocol) lets another application take over the browser for automation. Chromium only.
+CDP (Chrome DevTools Protocol) lets another application take over the browser for automation. It works with Chromium only.
 
 **Start keepalive with CDP enabled:**
 ```bash
