@@ -2,114 +2,115 @@
 
 Launch a browser, load a URL, and periodically refresh it to keep it alive.
 
-## Quick Start
+## Install
 
 ```bash
-cd /data/projects/browser-keepalive
-pnpm install
+git clone https://github.com/lc0rp/browser-keepalive.git
+cd browser-keepalive
+npm install
 
 # Install a browser engine (pick one):
-pnpm add playwright && pnpm exec playwright install chromium
-# or: pnpm add puppeteer
-
-# Run it:
-node src/cli.js https://example.com
+npm install playwright && npx playwright install chromium
+# or: npm install puppeteer
 ```
+
+> **pnpm/yarn users:** substitute your preferred package manager.
 
 ## Usage
 
 ```bash
-browser-keepalive <url> [options]
+node src/cli.js <url> [options]
 ```
 
 ### Examples
 
 ```bash
-# Basic: refresh every 60 seconds (default)
-browser-keepalive https://example.com
-
-# Refresh every 5 minutes
-browser-keepalive https://example.com -i 300
-
-# Headless, no cache busting
-browser-keepalive https://example.com --headless --no-cache-bust
-
-# Enable CDP for external automation
-browser-keepalive https://example.com -p 9222
-
-# Auto-install missing engine (scriptable with -y)
-browser-keepalive https://example.com --auto-install -y
-```
-
-### How to Run
-
-```bash
-# Run directly from source
+# Basic: refresh https://example.com every 60 seconds
 node src/cli.js https://example.com
 
-# Or via pnpm
-pnpm exec browser-keepalive https://example.com
+# Refresh every 5 minutes
+node src/cli.js https://example.com -i 300
 
-# Or build and run the bundle
-pnpm build && ./dist/cli.js https://example.com
+# Headless mode (no visible browser window)
+node src/cli.js https://example.com --headless
+
+# Disable cache busting
+node src/cli.js https://example.com --no-cache-bust
+
+# Enable CDP so another app can control the browser
+node src/cli.js https://example.com -p 9222
+
+# Auto-install missing engine (use -y to skip prompts)
+node src/cli.js https://example.com --auto-install -y
 ```
-
-## Requirements
-
-- Node.js 18+
-- One browser engine: `playwright` or `puppeteer`
 
 ## Options
 
 | Option | Description |
 |--------|-------------|
-| `<url>` | URL to load (required) |
-| `-i, --interval <sec>` | Refresh interval in seconds (default: 60) |
-| `--engine <name>` | Browser engine: `playwright` or `puppeteer` (default: playwright) |
-| `--headless` | Run browser without visible window |
-| `--cache-bust` | Add cache-busting query param on refresh (default: true) |
+| `<url>` | URL to load (**required**) |
+| `-i, --interval <sec>` | Refresh interval in seconds (default: `60`) |
+| `--engine <name>` | `playwright` or `puppeteer` (default: `playwright`) |
+| `--headless` | Hide browser window |
+| `--cache-bust` | Add `?_cb=...` query param each refresh (default: `true`) |
 | `--no-cache-bust` | Disable cache busting |
-| `--always-reset` | Always navigate to original URL (vs refresh current page) |
-| `--only-if-idle` | Only refresh after browser has been idle for the full interval |
+| `--always-reset` | Always navigate to original URL instead of refreshing current page |
+| `--only-if-idle` | Wait for browser to be idle before refreshing |
 | `-p, --cdp-port <port>` | Enable Chrome DevTools Protocol on this port |
-| `--auto-install` | Prompt to install missing engine or browser binaries |
+| `--auto-install` | Prompt to install missing engine/browser |
 | `-y, --yes` | Auto-confirm prompts (for scripts) |
 | `-V, --version` | Show version |
 | `-h, --help` | Show help |
 
-## CDP Control (Attach From Another App)
+## Alternate Ways to Run
 
-CDP gives full automation control over the browser (Chromium only). Run with `-p`:
+The examples above use `node src/cli.js` directly. You can also:
 
 ```bash
-browser-keepalive https://example.com -p 9222
+# Via npm/pnpm (uses package.json "bin" entry)
+npx browser-keepalive https://example.com
+
+# Build a bundled version first
+npm run build
+node dist/cli.js https://example.com
 ```
 
-Then attach from another Node.js app:
+All three methods are equivalent — pick whichever you prefer.
 
-**Playwright:**
+## CDP: Control the Browser From Another App
+
+CDP (Chrome DevTools Protocol) lets another application take over the browser for automation. Chromium only.
+
+**Start keepalive with CDP enabled:**
+```bash
+node src/cli.js https://example.com -p 9222
+```
+
+**Attach from Playwright:**
 ```js
+import { chromium } from 'playwright';
 const browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
 ```
 
-**Puppeteer:**
+**Attach from Puppeteer:**
 ```js
-// Use the webSocketDebuggerUrl printed by browser-keepalive
-const browser = await puppeteer.connect({ browserWSEndpoint: 'ws://...' });
+import puppeteer from 'puppeteer';
+// Use the webSocketDebuggerUrl printed when keepalive starts
+const browser = await puppeteer.connect({ browserWSEndpoint: 'ws://127.0.0.1:9222/...' });
 ```
 
-## Building (Optional)
+## Requirements
 
-Bundle into a single file:
-
-```bash
-pnpm build
-```
-
-Creates `dist/cli.js` — a standalone script (still requires Node.js and a browser engine).
+- **Node.js 18+**
+- **One of:** `playwright` or `puppeteer`
 
 ## Notes
 
-- The refresh loop is sequential (no overlapping refreshes).
-- `--cache-bust` adds a `?_cb=...` query param that changes each refresh.
-- `--only-if-idle` can delay refreshes indefinitely on pages with constant network activity.
+- Refreshes are sequential (never overlapping).
+- `--cache-bust` changes the query param each refresh to bypass caches.
+- `--only-if-idle` waits for no network activity before refreshing — can delay indefinitely on busy pages.
+- `--always-reset` navigates to the original URL; without it, the *current* page URL is refreshed (useful if you navigate manually).
+
+## License
+
+MIT
