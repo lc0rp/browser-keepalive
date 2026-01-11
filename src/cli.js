@@ -13,16 +13,18 @@ Usage:
   browser-keepalive --url <url> [--interval <seconds>] [--engine playwright|puppeteer] [--headed|--headless] [--ensure-engine]
 
 Options:
-  --url <url>                 URL to load (required)
-  --interval <seconds>        Refresh interval in seconds (default: 60)
-  --add-fragment              Add random fragment each refresh (default: true)
-  --no-add-fragment           Disable random fragment
-  --reset-url                 Always navigate to the original --url (default: false)
+  --url <url>                      URL to load (required)
+  --interval <seconds>             Refresh interval in seconds (default: 60)
+  --add-fragment                   Add random fragment each refresh (default: true)
+  --no-add-fragment                Disable random fragment
+  --reset-url                      Always navigate to the original --url (default: false)
   --engine <playwright|puppeteer>  Browser automation engine (default: playwright)
-  --headed                    Launch with a visible browser window (default)
-  --headless                  Launch without a visible browser window
-  --ensure-engine             If the selected engine isn't installed, prompt to install it (and Playwright browsers)
-  --help                      Show help
+  --headed                         Launch with a visible browser window (default)
+  --headless                       Launch without a visible browser window
+  --ensure-engine                  If the selected engine isn't installed, prompt to install it (and Playwright browsers)
+  --cdp-port <port>                Enable Chrome DevTools Protocol (CDP) on localhost:<port> and print endpoints
+  --idle-refresh                   Only refresh when the browser has been idle for at least --interval seconds
+  --help                           Show help
 `;
 
 	console[exitCode === 0 ? "log" : "error"](text);
@@ -38,6 +40,8 @@ function parseArgs(argv) {
 		engine: "playwright",
 		headless: false,
 		ensureEngine: false,
+		cdpPort: null,
+		idleRefresh: false,
 	};
 
 	for (let i = 0; i < argv.length; i++) {
@@ -113,6 +117,16 @@ function parseArgs(argv) {
 			continue;
 		}
 
+		if (key === "cdp-port") {
+			out.cdpPort = normalizePort(takeValue());
+			continue;
+		}
+
+		if (key === "idle-refresh") {
+			out.idleRefresh = true;
+			continue;
+		}
+
 		throw new Error(`Unknown option: --${key}`);
 	}
 
@@ -125,6 +139,14 @@ function parseArgs(argv) {
 	}
 
 	return out;
+}
+
+function normalizePort(value) {
+	const n = Number(value);
+	if (!Number.isInteger(n) || n <= 0 || n > 65535) {
+		throw new Error("--cdp-port must be an integer between 1 and 65535");
+	}
+	return n;
 }
 
 function stripHash(urlString) {
@@ -269,9 +291,9 @@ async function ensurePlaywrightBrowsersInstalled() {
 	}
 }
 
-async function launchWithOptionalEnsure({ engine, headless, ensureEngine }) {
+async function launchWithOptionalEnsure({ engine, headless, ensureEngine, cdpPort }) {
 	try {
-		return await launchEngine(engine, { headless });
+		return await launchEngine(engine, { headless, cdpPort });
 	} catch (err) {
 		if (!ensureEngine) {
 			throw err;
@@ -279,15 +301,92 @@ async function launchWithOptionalEnsure({ engine, headless, ensureEngine }) {
 
 		if (isMissingEngineError(err, engine)) {
 			await ensureEngineInstalled(engine);
-			return await launchEngine(engine, { headless });
+			return await launchEngine(engine, { headless, cdpPort });
 		}
 
 		if (engine === "playwright" && isPlaywrightMissingBrowserError(err)) {
 			await ensurePlaywrightBrowsersInstalled();
-			return await launchEngine(engine, { headless });
+			return await launchEngine(engine, { headless, cdpPort });
 		}
 
 		throw err;
+	}
+}
+
+function registerActivityTracking(page, markActivity) {
+	const events = [
+		"domcontentloaded",
+		"load",
+		"framenavigated",
+		"request",
+		"requestfinished",
+		"requestfailed",
+		"response",
+	];
+
+	for (const evt of events) {
+		try {
+			page.on(evt, () => markActivity(evt));
+		} catch {
+			// best-effort
+		}
+	}
+}
+
+async function waitForIdle({ intervalMs, getLastActivityAt, stoppedRef }) {
+	while (!stoppedRef.stopped) {
+		const now = Date.now();
+		const idleForMs = now - getLastActivityAt();
+		if (idleForMs >= intervalMs) {
+			return;
+		}
+
+		const remainingMs = intervalMs - idleForMs;
+		const sleepMs = Math.min(remainingMs, 5000);
+		console.info(
+			`[browser-keepalive] idle-refresh: waiting for idle (remaining ~${Math.ceil(remainingMs / 1000)}s)`
+		);
+		await sleep(sleepMs);
+	}
+}
+
+async function waitForJson(url, timeoutMs) {
+	const startedAt = Date.now();
+	let lastErr;
+
+	while (Date.now() - startedAt < timeoutMs) {
+		try {
+			if (typeof fetch !== "function") {
+				throw new Error("global fetch() is not available (Node 18+ required)");
+			}
+			const res = await fetch(url, { headers: { accept: "application/json" } });
+			if (!res.ok) {
+				throw new Error(`HTTP ${res.status}`);
+			}
+			return await res.json();
+		} catch (err) {
+			lastErr = err;
+			await sleep(250);
+		}
+	}
+
+	throw lastErr ?? new Error(`Timed out fetching ${url}`);
+}
+
+async function printCdpEndpoints(cdpPort) {
+	const base = `http://127.0.0.1:${cdpPort}`;
+	console.info(`[browser-keepalive] CDP enabled: ${base}`);
+
+	try {
+		const version = await waitForJson(`${base}/json/version`, 10000);
+		if (version?.webSocketDebuggerUrl) {
+			console.info(`[browser-keepalive] CDP websocket: ${version.webSocketDebuggerUrl}`);
+		}
+	} catch (err) {
+		console.warn(
+			"[browser-keepalive] CDP: browser launched but could not read /json/version (you may need to wait a moment):",
+			err
+		);
 	}
 }
 
@@ -308,9 +407,23 @@ async function main() {
 		engine: opts.engine,
 		headless: opts.headless,
 		ensureEngine: opts.ensureEngine,
+		cdpPort: opts.cdpPort,
 	});
 
+	if (opts.cdpPort) {
+		await printCdpEndpoints(opts.cdpPort);
+	}
+
 	let stopped = false;
+	const stoppedRef = { get stopped() { return stopped; } };
+
+	let lastActivityAt = Date.now();
+	const markActivity = (evt) => {
+		lastActivityAt = Date.now();
+		// uncommentable if needed: console.debug(`[browser-keepalive] activity: ${evt}`);
+	};
+	registerActivityTracking(session.page, markActivity);
+
 	const stop = async (reason) => {
 		if (stopped) return;
 		stopped = true;
@@ -323,15 +436,27 @@ async function main() {
 	process.on("SIGTERM", () => void stop("SIGTERM"));
 
 	console.info(
-		`[browser-keepalive] engine=${session.engine} interval=${opts.intervalSeconds}s addFragment=${opts.addFragment} resetUrl=${opts.resetUrl} headless=${opts.headless}`
+		`[browser-keepalive] engine=${session.engine} interval=${opts.intervalSeconds}s addFragment=${opts.addFragment} resetUrl=${opts.resetUrl} headless=${opts.headless} cdpPort=${opts.cdpPort ?? "off"} idleRefresh=${opts.idleRefresh}`
 	);
 	console.info(`[browser-keepalive] loading: ${firstUrl}`);
 
 	await session.goto(firstUrl, { waitUntil: "domcontentloaded" });
+	markActivity("initial-load");
+
+	const intervalMs = opts.intervalSeconds * 1000;
 
 	while (!stopped) {
-		await sleep(opts.intervalSeconds * 1000);
+		await sleep(intervalMs);
 		if (stopped) break;
+
+		if (opts.idleRefresh) {
+			await waitForIdle({
+				intervalMs,
+				getLastActivityAt: () => lastActivityAt,
+				stoppedRef,
+			});
+			if (stopped) break;
+		}
 
 		try {
 			if (opts.resetUrl) {
