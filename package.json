@@ -16,9 +16,9 @@
     "lint": "node -c ./src/cli.js && node -c ./src/engines.js"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^4.0.16",
+    "@vitest/coverage-v8": "^2.1.9",
     "esbuild": "^0.20.2",
-    "vitest": "^4.0.16"
+    "vitest": "^2.1.9"
   },
   "dependencies": {
     "commander": "^14.0.2"
