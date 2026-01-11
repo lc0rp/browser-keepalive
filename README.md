@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/lc0rp/browser-keepalive/actions/workflows/ci.yml/badge.svg)](https://github.com/lc0rp/browser-keepalive/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/lc0rp/browser-keepalive/branch/main/graph/badge.svg)](https://codecov.io/gh/lc0rp/browser-keepalive)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Launch a browser, load a URL, and periodically refresh it to keep it alive.
@@ -121,7 +121,7 @@ pnpm build
 
 ## Requirements
 
-- **Node.js 18+**
+- **Node.js 20+**
 - **One of:** `playwright` or `puppeteer`
 
 ## Notes

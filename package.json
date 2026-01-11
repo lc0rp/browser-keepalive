@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "private": true,
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "bin": {
     "browser-keepalive": "./src/cli.js"
@@ -16,9 +19,9 @@
     "lint": "node -c ./src/cli.js && node -c ./src/engines.js"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^2.1.9",
+    "@vitest/coverage-v8": "^4.0.16",
     "esbuild": "^0.20.2",
-    "vitest": "^2.1.9"
+    "vitest": "^4.0.16"
   },
   "dependencies": {
     "commander": "^14.0.2"
