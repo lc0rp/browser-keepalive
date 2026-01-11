@@ -2,74 +2,110 @@
 
 A small Node.js CLI that launches a browser, loads a URL, and periodically refreshes it to keep it alive.
 
-## Requirements
-
-- Node.js 18+ (newer recommended)
-- One of:
-  - `playwright`
-  - `puppeteer`
-
-Install the engine you want:
-
-```bash
-cd /data/projects/browser-keepalive
-pnpm add playwright
-# and for Playwright, install a browser binary:
-pnpm exec playwright install chromium
-
-# or
-pnpm add puppeteer
-```
-
-## Usage
-
-```bash
-browser-keepalive --url https://example.com --interval 60 --engine playwright --headed
-```
-
-### Options
-
-- `--interval <seconds>` refresh interval in seconds (default: `60`)
-- `--url <url>` initial URL to load (required)
-- `--add-fragment` add a random fragment each refresh to bypass caching (default: `true`)
-  - use `--no-add-fragment` to disable
-- `--reset-url` always navigate to the original `--url` on each refresh (default: `false`)
-  - when false, it refreshes the browser’s current URL so you can browse around
-- `--engine <playwright|puppeteer>` (default: `playwright`)
-- `--headed` visible browser window (default)
-- `--headless` no visible browser window
-- `--ensure-engine` if the selected engine isn’t installed, prompt to install it (and for Playwright, optionally install Chromium too)
-- `--cdp-port <port>` enable Chrome DevTools Protocol (CDP) on `127.0.0.1:<port>` and print endpoints
-- `--idle-refresh` collision control: only refresh when the browser has been idle for at least `--interval` seconds
-
-## CDP Control (Attach From Another App)
-
-CDP gives full automation control (Chromium-only). Run keepalive with a CDP port:
-
-```bash
-browser-keepalive --url https://example.com --engine playwright --cdp-port 9222
-```
-
-Then attach from another Node app:
-
-- Playwright:
-  - `chromium.connectOverCDP('http://127.0.0.1:9222')`
-- Puppeteer:
-  - Use the `webSocketDebuggerUrl` printed by keepalive and call `puppeteer.connect({ browserWSEndpoint })`
-
-## Build
-
-This is “buildable” as a single bundled JS file (engines stay external so you can choose one at install time):
+## Quick Start
 
 ```bash
 cd /data/projects/browser-keepalive
 pnpm install
-pnpm build
-./dist/cli.js --help
+
+# Install a browser engine (pick one):
+pnpm add playwright && pnpm exec playwright install chromium
+# or: pnpm add puppeteer
+
+# Run it:
+node src/cli.js --url https://example.com
 ```
+
+## How to Run
+
+There are three ways to run the CLI. They all do the same thing:
+
+```bash
+# 1. Run directly from source (no build step needed)
+node src/cli.js --url https://example.com
+
+# 2. Use pnpm/npx (uses the "bin" entry in package.json)
+pnpm exec browser-keepalive --url https://example.com
+# or: npx browser-keepalive --url https://example.com
+
+# 3. Build first, then run the bundled version
+pnpm build
+node dist/cli.js --url https://example.com
+# or just: ./dist/cli.js --url https://example.com
+```
+
+Pick whichever you prefer. Option 1 is simplest for development. Option 3 produces a single bundled file if you want to copy it somewhere.
+
+## Requirements
+
+- Node.js 18+
+- One browser engine: `playwright` or `puppeteer`
+
+## Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--url <url>` | *(required)* | URL to load |
+| `--interval <seconds>` | `60` | Refresh interval in seconds |
+| `--engine <name>` | `playwright` | Browser engine: `playwright` or `puppeteer` |
+| `--headed` | ✓ | Show the browser window |
+| `--headless` | | Hide the browser window |
+| `--add-fragment` | `true` | Add random fragment on refresh to bypass cache |
+| `--no-add-fragment` | | Disable fragment addition |
+| `--reset-url` | `false` | Always navigate to original URL (vs refresh current page) |
+| `--ensure-engine` | | Prompt to install missing engine |
+| `--cdp-port <port>` | | Enable Chrome DevTools Protocol on this port |
+| `--idle-refresh` | | Only refresh after idle period (no recent network activity) |
+
+### Examples
+
+```bash
+# Basic: refresh every 60 seconds (default)
+node src/cli.js --url https://example.com
+
+# Refresh every 5 minutes, headless
+node src/cli.js --url https://example.com --interval 300 --headless
+
+# Use Puppeteer instead of Playwright
+node src/cli.js --url https://example.com --engine puppeteer
+
+# Enable CDP so another app can attach
+node src/cli.js --url https://example.com --cdp-port 9222
+```
+
+## CDP Control (Attach From Another App)
+
+CDP gives full automation control over the browser (Chromium only). Run with `--cdp-port`:
+
+```bash
+node src/cli.js --url https://example.com --cdp-port 9222
+```
+
+Then attach from another Node.js app:
+
+**Playwright:**
+```js
+const browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
+```
+
+**Puppeteer:**
+```js
+// Use the webSocketDebuggerUrl printed by browser-keepalive
+const browser = await puppeteer.connect({ browserWSEndpoint: 'ws://...' });
+```
+
+## Building (Optional)
+
+Bundle everything into a single file:
+
+```bash
+pnpm build
+```
+
+This creates `dist/cli.js` — a standalone script you can copy and run anywhere (still requires Node.js and a browser engine installed).
 
 ## Notes
 
-- If `--add-fragment` is enabled, the fragment is replaced each cycle (it won’t grow forever).
-- The loop is sequential (no overlapping refreshes).
+- The refresh loop is sequential (no overlapping refreshes).
+- `--add-fragment` replaces the fragment each cycle (won't grow forever).
 - `--idle-refresh` can delay refreshes indefinitely on pages with constant background network activity.
