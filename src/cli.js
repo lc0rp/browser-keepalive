@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { fileURLToPath } from "node:url";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { Command } from "commander";
@@ -38,6 +39,11 @@ program
 	.option("--engine <name>", "Browser engine: playwright or puppeteer", "playwright")
 	.option("--headless", "Run browser without visible window")
 	.option("--auto-install", "Prompt to install missing engine or browser binaries")
+	.option(
+		"--user-data-dir <dir>",
+		"Persist browser profile/cookies in this directory (default: ~/.browser-keepalive/chrome)",
+		join(homedir(), ".browser-keepalive", "chrome")
+	)
 	.option("-p, --cdp-port <port>", "Enable Chrome DevTools Protocol on this port")
 	.option("--only-if-idle", "Only refresh when browser has been idle for the full interval")
 	.option("-y, --yes", "Auto-confirm all prompts (for scripts)")
@@ -70,6 +76,7 @@ try {
 		engine: validateEngine(opts.engine),
 		headless: opts.headless || false,
 		autoInstall: opts.autoInstall || false,
+		userDataDir: String(opts.userDataDir || "").trim(),
 		cdpPort: normalizeCdpPort(opts.cdpPort),
 		onlyIfIdle: opts.onlyIfIdle || false,
 		yes: opts.yes || false,
@@ -224,9 +231,18 @@ async function ensurePuppeteerBrowsersInstalled() {
 	}
 }
 
-async function launchWithOptionalInstall({ engine, headless, autoInstall, cdpPort }) {
+function ensureDir(dir) {
+	if (!dir) return;
 	try {
-		return await launchEngine(engine, { headless, cdpPort });
+		mkdirSync(dir, { recursive: true });
+	} catch (err) {
+		throw new Error(`Failed to create user data dir '${dir}': ${err.message || err}`);
+	}
+}
+
+async function launchWithOptionalInstall({ engine, headless, autoInstall, userDataDir, cdpPort }) {
+	try {
+		return await launchEngine(engine, { headless, userDataDir, cdpPort });
 	} catch (err) {
 		if (!autoInstall) {
 			throw err;
@@ -234,17 +250,17 @@ async function launchWithOptionalInstall({ engine, headless, autoInstall, cdpPor
 
 		if (isMissingEngineError(err, engine)) {
 			await ensureEngineInstalled(engine);
-			return await launchEngine(engine, { headless, cdpPort });
+			return await launchEngine(engine, { headless, userDataDir, cdpPort });
 		}
 
 		if (engine === "playwright" && isPlaywrightMissingBrowserError(err)) {
 			await ensurePlaywrightBrowsersInstalled();
-			return await launchEngine(engine, { headless, cdpPort });
+			return await launchEngine(engine, { headless, userDataDir, cdpPort });
 		}
 
 		if (engine === "puppeteer" && isPuppeteerMissingBrowserError(err)) {
 			await ensurePuppeteerBrowsersInstalled();
-			return await launchEngine(engine, { headless, cdpPort });
+			return await launchEngine(engine, { headless, userDataDir, cdpPort });
 		}
 
 		throw err;
@@ -327,10 +343,12 @@ async function main() {
 	const baseUrl = config.cacheBust ? stripQueryParam(config.url, "_cb") : config.url;
 	const firstUrl = config.cacheBust ? withCacheBuster(baseUrl) : baseUrl;
 
+	ensureDir(config.userDataDir);
 	const session = await launchWithOptionalInstall({
 		engine: config.engine,
 		headless: config.headless,
 		autoInstall: config.autoInstall,
+		userDataDir: config.userDataDir,
 		cdpPort: config.cdpPort,
 	});
 
@@ -363,7 +381,7 @@ async function main() {
 	process.on("SIGTERM", () => void stop("SIGTERM"));
 
 	console.info(
-		`[keepalive] engine=${session.engine} interval=${config.intervalSeconds}s cacheBust=${config.cacheBust} alwaysReset=${config.alwaysReset} headless=${config.headless} cdp=${config.cdpPort ?? "off"} onlyIfIdle=${config.onlyIfIdle}`
+		`[keepalive] engine=${session.engine} interval=${config.intervalSeconds}s cacheBust=${config.cacheBust} alwaysReset=${config.alwaysReset} headless=${config.headless} userDataDir=${config.userDataDir || "(none)"} cdp=${config.cdpPort ?? "off"} onlyIfIdle=${config.onlyIfIdle}`
 	);
 	console.info(`[keepalive] loading: ${firstUrl}`);
 

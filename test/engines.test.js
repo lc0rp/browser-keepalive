@@ -186,6 +186,8 @@ function createMockBrowser() {
 	};
 	const context = {
 		newPage: vi.fn().mockResolvedValue(page),
+		pages: vi.fn().mockReturnValue([page]),
+		close: vi.fn().mockResolvedValue(undefined),
 	};
 	const browser = {
 		newContext: vi.fn().mockResolvedValue(context),
@@ -303,6 +305,34 @@ describe("launchPlaywright", () => {
 			.rejects.toThrow("Failed to import 'playwright'");
 	});
 
+	it("uses launchPersistentContext when userDataDir specified", async () => {
+		const { page, context } = createMockBrowser();
+		const launchFn = vi.fn();
+		const launchPersistentFn = vi.fn().mockResolvedValue(context);
+		const mockImport = vi.fn().mockResolvedValue({
+			chromium: { launch: launchFn, launchPersistentContext: launchPersistentFn },
+		});
+
+		const session = await launchPlaywright({
+			headless: false,
+			cdpPort: null,
+			userDataDir: "/tmp/browser-keepalive-profile",
+			_import: mockImport,
+		});
+
+		expect(launchPersistentFn).toHaveBeenCalledWith("/tmp/browser-keepalive-profile", {
+			headless: false,
+			args: ["--start-maximized"],
+			viewport: null,
+			channel: "chrome",
+		});
+		expect(launchFn).not.toHaveBeenCalled();
+
+		await session.close();
+		expect(context.close).toHaveBeenCalledOnce();
+		expect(session.page).toBe(page);
+	});
+
 	it("throws when chromium export missing", async () => {
 		const mockImport = vi.fn().mockResolvedValue({});
 
@@ -400,6 +430,29 @@ describe("launchPuppeteer", () => {
 
 		await expect(launchPuppeteer({ headless: false, cdpPort: null, _import: mockImport }))
 			.rejects.toThrow("Failed to import 'puppeteer'");
+	});
+
+	it("passes userDataDir option to puppeteer.launch", async () => {
+		const { browser } = createMockBrowser();
+		const launchFn = vi.fn().mockResolvedValue(browser);
+		const mockImport = vi.fn().mockResolvedValue({
+			default: { launch: launchFn },
+		});
+
+		await launchPuppeteer({
+			headless: false,
+			cdpPort: null,
+			userDataDir: "/tmp/browser-keepalive-profile",
+			_import: mockImport,
+		});
+
+		expect(launchFn).toHaveBeenCalledWith({
+			headless: false,
+			args: ["--start-maximized"],
+			userDataDir: "/tmp/browser-keepalive-profile",
+			defaultViewport: null,
+			channel: "chrome",
+		});
 	});
 
 	it("throws when launch function missing", async () => {

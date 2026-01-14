@@ -115,10 +115,10 @@ export async function importModule(moduleName) {
 
 /**
  * Launch Playwright browser.
- * @param {{ headless: boolean, cdpPort: number | null, _import?: function }} options
+ * @param {{ headless: boolean, cdpPort: number | null, userDataDir?: string | null, _import?: function }} options
  * @returns {Promise<object>}
  */
-export async function launchPlaywright({ headless, cdpPort, _import = importModule }) {
+export async function launchPlaywright({ headless, cdpPort, userDataDir = null, _import = importModule }) {
 	let mod;
 	try {
 		mod = await _import("playwright");
@@ -138,6 +138,8 @@ export async function launchPlaywright({ headless, cdpPort, _import = importModu
 		args.push("--start-maximized");
 	}
 
+	const contextOptions = !headless ? { viewport: null } : {};
+
 	const launch = async (channel) => {
 		const opts = { headless, args };
 		if (channel) {
@@ -146,10 +148,23 @@ export async function launchPlaywright({ headless, cdpPort, _import = importModu
 		return await chromium.launch(opts);
 	};
 
+	const launchPersistent = async (channel) => {
+		if (!chromium.launchPersistentContext) {
+			throw new Error("'playwright' was imported but `chromium.launchPersistentContext()` was not found.");
+		}
+		const opts = { headless, args, ...contextOptions };
+		if (channel) {
+			opts.channel = channel;
+		}
+		return await chromium.launchPersistentContext(userDataDir, opts);
+	};
+
+	const doLaunch = userDataDir ? launchPersistent : launch;
+
 	let browser;
 	for (const channel of preferredPlaywrightChannels()) {
 		try {
-			browser = await launch(channel);
+			browser = await doLaunch(channel);
 			break;
 		} catch (err) {
 			if (isPlaywrightMissingSystemChannelError(err, channel)) {
@@ -160,10 +175,17 @@ export async function launchPlaywright({ headless, cdpPort, _import = importModu
 	}
 
 	if (!browser) {
-		browser = await launch(null);
+		browser = await doLaunch(null);
 	}
 
-	const context = await browser.newContext(!headless ? { viewport: null } : {});
+	if (userDataDir) {
+		const context = browser;
+		const existing = typeof context.pages === "function" ? context.pages() : [];
+		const page = existing[0] || (await context.newPage());
+		return createSession("playwright", page, context, cdpPort);
+	}
+
+	const context = await browser.newContext(contextOptions);
 	const page = await context.newPage();
 
 	return createSession("playwright", page, browser, cdpPort);
@@ -171,10 +193,10 @@ export async function launchPlaywright({ headless, cdpPort, _import = importModu
 
 /**
  * Launch Puppeteer browser.
- * @param {{ headless: boolean, cdpPort: number | null, _import?: function }} options
+ * @param {{ headless: boolean, cdpPort: number | null, userDataDir?: string | null, _import?: function }} options
  * @returns {Promise<object>}
  */
-export async function launchPuppeteer({ headless, cdpPort, _import = importModule }) {
+export async function launchPuppeteer({ headless, cdpPort, userDataDir = null, _import = importModule }) {
 	let mod;
 	try {
 		mod = await _import("puppeteer");
@@ -196,6 +218,9 @@ export async function launchPuppeteer({ headless, cdpPort, _import = importModul
 
 	const launch = async (channel) => {
 		const opts = { headless, args };
+		if (userDataDir) {
+			opts.userDataDir = userDataDir;
+		}
 		if (!headless) {
 			opts.defaultViewport = null;
 		}
@@ -227,20 +252,21 @@ export async function launchPuppeteer({ headless, cdpPort, _import = importModul
 /**
  * Launch a browser using the specified engine.
  * @param {"playwright" | "puppeteer"} engine
- * @param {{ headless?: boolean, cdpPort?: number | null, _import?: function }} options
+ * @param {{ headless?: boolean, cdpPort?: number | null, userDataDir?: string | null, _import?: function }} options
  * @returns {Promise<object>}
  */
 export async function launchEngine(engine, options = {}) {
 	const headless = options.headless === true;
 	const cdpPort = normalizePort(options.cdpPort);
+	const userDataDir = options.userDataDir ?? null;
 	const _import = options._import || importModule;
 
 	if (engine === "playwright") {
-		return await launchPlaywright({ headless, cdpPort, _import });
+		return await launchPlaywright({ headless, cdpPort, userDataDir, _import });
 	}
 
 	if (engine === "puppeteer") {
-		return await launchPuppeteer({ headless, cdpPort, _import });
+		return await launchPuppeteer({ headless, cdpPort, userDataDir, _import });
 	}
 
 	throw new Error(`Unknown engine: ${engine}`);
