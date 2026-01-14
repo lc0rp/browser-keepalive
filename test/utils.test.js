@@ -8,6 +8,7 @@ import {
 	sleep,
 	isMissingEngineError,
 	isPlaywrightMissingBrowserError,
+	isPuppeteerMissingBrowserError,
 } from "../src/utils.js";
 
 describe("parseInterval", () => {
@@ -232,5 +233,26 @@ describe("isPlaywrightMissingBrowserError", () => {
 
 	it("handles non-Error objects", () => {
 		expect(isPlaywrightMissingBrowserError("Playwright: executable doesn't exist")).toBe(true);
+	});
+});
+
+describe("isPuppeteerMissingBrowserError", () => {
+	it("detects 'Could not find Chrome' errors", () => {
+		const err = new Error("Could not find Chrome (ver. 143.0.7499.192). This can occur if either...");
+		expect(isPuppeteerMissingBrowserError(err)).toBe(true);
+	});
+
+	it("detects 'browsers install' suggestion errors", () => {
+		const err = new Error("Run `npx puppeteer browsers install chrome` to download browsers");
+		expect(isPuppeteerMissingBrowserError(err)).toBe(true);
+	});
+
+	it("returns false for unrelated errors", () => {
+		const err = new Error("Puppeteer timeout exceeded");
+		expect(isPuppeteerMissingBrowserError(err)).toBe(false);
+	});
+
+	it("handles non-Error objects", () => {
+		expect(isPuppeteerMissingBrowserError("Could not find Chrome")).toBe(true);
 	});
 });

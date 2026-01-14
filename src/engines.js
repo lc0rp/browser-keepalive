@@ -3,6 +3,35 @@
  * Supports Playwright and Puppeteer.
  */
 
+function isPuppeteerCouldNotFindChromeError(err) {
+	const message = err instanceof Error ? err.message : String(err ?? "");
+	return message.toLowerCase().includes("could not find chrome");
+}
+
+function defaultPuppeteerChannel() {
+	// Prefer system-installed Chrome first for smoother local dev,
+	// and fall back to Puppeteer's managed browser if it's not present.
+	return "chrome";
+}
+
+function isPlaywrightMissingSystemChannelError(err, channel) {
+	if (!channel) return false;
+	const message = err instanceof Error ? err.message : String(err ?? "");
+	const m = message.toLowerCase();
+	return (
+		m.includes(`chromium distribution '${channel}' is not found`) ||
+		m.includes(`chromium distribution \"${channel}\" is not found`) ||
+		m.includes("executable doesn't exist") ||
+		m.includes("executable does not exist") ||
+		m.includes("channel") && m.includes("not supported")
+	);
+}
+
+function preferredPlaywrightChannels() {
+	// Order requested: system Chrome, then system Edge, then Playwright-managed.
+	return ["chrome", "msedge"];
+}
+
 /**
  * Normalize and validate CDP port.
  * @param {number | string | null | undefined} value
@@ -105,7 +134,32 @@ export async function launchPlaywright({ headless, cdpPort, _import = importModu
 	}
 
 	const args = buildChromiumArgs({ cdpPort });
-	const browser = await chromium.launch({ headless, args });
+
+	const launch = async (channel) => {
+		const opts = { headless, args };
+		if (channel) {
+			opts.channel = channel;
+		}
+		return await chromium.launch(opts);
+	};
+
+	let browser;
+	for (const channel of preferredPlaywrightChannels()) {
+		try {
+			browser = await launch(channel);
+			break;
+		} catch (err) {
+			if (isPlaywrightMissingSystemChannelError(err, channel)) {
+				continue;
+			}
+			throw err;
+		}
+	}
+
+	if (!browser) {
+		browser = await launch(null);
+	}
+
 	const context = await browser.newContext();
 	const page = await context.newPage();
 
@@ -133,7 +187,29 @@ export async function launchPuppeteer({ headless, cdpPort, _import = importModul
 	}
 
 	const args = buildChromiumArgs({ cdpPort });
-	const browser = await puppeteer.launch({ headless, args });
+
+	const launch = async (channel) => {
+		const opts = { headless, args };
+		if (channel) {
+			opts.channel = channel;
+		}
+		return await puppeteer.launch(opts);
+	};
+
+	const preferredChannel = defaultPuppeteerChannel();
+	let browser;
+	try {
+		browser = await launch(preferredChannel);
+	} catch (err) {
+		// If the preferred system Chrome isn't installed, fall back to Puppeteer's
+		// managed browser (if present, or if auto-install is enabled in the CLI).
+		if (preferredChannel && isPuppeteerCouldNotFindChromeError(err)) {
+			browser = await launch(null);
+		} else {
+			throw err;
+		}
+	}
+
 	const page = await browser.newPage();
 
 	return createSession("puppeteer", page, browser, cdpPort);

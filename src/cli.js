@@ -18,6 +18,7 @@ import {
 	sleep,
 	isMissingEngineError,
 	isPlaywrightMissingBrowserError,
+	isPuppeteerMissingBrowserError,
 } from "./utils.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -40,14 +41,17 @@ program
 	.option("-p, --cdp-port <port>", "Enable Chrome DevTools Protocol on this port")
 	.option("--only-if-idle", "Only refresh when browser has been idle for the full interval")
 	.option("-y, --yes", "Auto-confirm all prompts (for scripts)")
-	.addHelpText("after", `
+	.addHelpText(
+		"after",
+		`
 Examples:
   $ browser-keepalive https://example.com
   $ browser-keepalive https://example.com -i 300
   $ browser-keepalive https://example.com --headless --no-cache-bust
   $ browser-keepalive https://example.com -p 9222    # enable CDP
   $ browser-keepalive https://example.com --auto-install -y
-`)
+`
+	)
 	.showHelpAfterError(true);
 
 program.parse();
@@ -128,6 +132,16 @@ function runInstallPlaywrightChromium(pm) {
 	throw new Error(`Unknown package manager: ${pm}`);
 }
 
+function runInstallPuppeteerChrome(pm) {
+	if (pm === "pnpm") {
+		return spawnSync("pnpm", ["exec", "puppeteer", "browsers", "install", "chrome"], { stdio: "inherit" });
+	}
+	if (pm === "npm") {
+		return spawnSync("npx", ["puppeteer", "browsers", "install", "chrome"], { stdio: "inherit" });
+	}
+	throw new Error(`Unknown package manager: ${pm}`);
+}
+
 async function ensureEngineInstalled(engine) {
 	const pm = pickPackageManager();
 	if (!pm) {
@@ -159,14 +173,27 @@ async function ensureEngineInstalled(engine) {
 			}
 		}
 	}
+
+	if (engine === "puppeteer") {
+		const installBrowsers = await promptYesNo(
+			"Install Puppeteer Chrome browser binaries too? (recommended)",
+			true
+		);
+		if (installBrowsers) {
+			const installResult = runInstallPuppeteerChrome(pm);
+			if (installResult.status !== 0) {
+				throw new Error(
+					`Puppeteer installed, but failed to install Chrome (exit code ${installResult.status ?? "?"}).`
+				);
+			}
+		}
+	}
 }
 
 async function ensurePlaywrightBrowsersInstalled() {
 	const pm = pickPackageManager();
 	if (!pm) {
-		throw new Error(
-			"No supported package manager found. Run `playwright install chromium` manually."
-		);
+		throw new Error("No supported package manager found. Run `playwright install chromium` manually.");
 	}
 
 	const ok = await promptYesNo("Playwright browser binaries are missing. Install Chromium now?");
@@ -177,6 +204,23 @@ async function ensurePlaywrightBrowsersInstalled() {
 	const installResult = runInstallPlaywrightChromium(pm);
 	if (installResult.status !== 0) {
 		throw new Error(`Failed to install Playwright Chromium (exit code ${installResult.status ?? "?"}).`);
+	}
+}
+
+async function ensurePuppeteerBrowsersInstalled() {
+	const pm = pickPackageManager();
+	if (!pm) {
+		throw new Error("No supported package manager found. Run `npx puppeteer browsers install chrome` manually.");
+	}
+
+	const ok = await promptYesNo("Puppeteer browser binaries are missing. Install Chrome now?");
+	if (!ok) {
+		throw new Error("Puppeteer browser binaries missing. Run `npx puppeteer browsers install chrome` and retry.");
+	}
+
+	const installResult = runInstallPuppeteerChrome(pm);
+	if (installResult.status !== 0) {
+		throw new Error(`Failed to install Puppeteer Chrome (exit code ${installResult.status ?? "?"}).`);
 	}
 }
 
@@ -195,6 +239,11 @@ async function launchWithOptionalInstall({ engine, headless, autoInstall, cdpPor
 
 		if (engine === "playwright" && isPlaywrightMissingBrowserError(err)) {
 			await ensurePlaywrightBrowsersInstalled();
+			return await launchEngine(engine, { headless, cdpPort });
+		}
+
+		if (engine === "puppeteer" && isPuppeteerMissingBrowserError(err)) {
+			await ensurePuppeteerBrowsersInstalled();
 			return await launchEngine(engine, { headless, cdpPort });
 		}
 
@@ -290,7 +339,11 @@ async function main() {
 	}
 
 	let stopped = false;
-	const stoppedRef = { get stopped() { return stopped; } };
+	const stoppedRef = {
+		get stopped() {
+			return stopped;
+		},
+	};
 
 	let lastActivityAt = Date.now();
 	const markActivity = () => {

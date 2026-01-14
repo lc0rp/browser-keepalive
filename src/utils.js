@@ -110,3 +110,19 @@ export function isPlaywrightMissingBrowserError(err) {
 			m.includes("playwright install"))
 	);
 }
+
+/**
+ * Check if an error indicates Puppeteer can't find its managed browser.
+ * @param {unknown} err
+ * @returns {boolean}
+ */
+export function isPuppeteerMissingBrowserError(err) {
+	const message = err instanceof Error ? err.message : String(err);
+	const m = message.toLowerCase();
+	return (
+		m.includes("could not find chrome") ||
+		m.includes("could not find chromium") ||
+		m.includes("npx puppeteer browsers install") ||
+		(m.includes("puppeteer") && m.includes("browsers install"))
+	);
+}

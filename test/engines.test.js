@@ -220,7 +220,7 @@ describe("launchPlaywright", () => {
 
 		await launchPlaywright({ headless: true, cdpPort: null, _import: mockImport });
 
-		expect(launchFn).toHaveBeenCalledWith({ headless: true, args: [] });
+		expect(launchFn).toHaveBeenCalledWith({ headless: true, args: [], channel: "chrome" });
 	});
 
 	it("passes CDP args when cdpPort specified", async () => {
@@ -235,7 +235,42 @@ describe("launchPlaywright", () => {
 		expect(launchFn).toHaveBeenCalledWith({
 			headless: false,
 			args: ["--remote-debugging-port=9222", "--remote-debugging-address=127.0.0.1"],
+			channel: "chrome",
 		});
+	});
+
+	it("falls back from chrome to msedge when chrome missing", async () => {
+		const { browser } = createMockBrowser();
+		const launchFn = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("Chromium distribution 'chrome' is not found"))
+			.mockResolvedValueOnce(browser);
+		const mockImport = vi.fn().mockResolvedValue({
+			chromium: { launch: launchFn },
+		});
+
+		await launchPlaywright({ headless: false, cdpPort: null, _import: mockImport });
+
+		expect(launchFn).toHaveBeenNthCalledWith(1, { headless: false, args: [], channel: "chrome" });
+		expect(launchFn).toHaveBeenNthCalledWith(2, { headless: false, args: [], channel: "msedge" });
+	});
+
+	it("falls back to Playwright-managed Chromium when no system browser found", async () => {
+		const { browser } = createMockBrowser();
+		const launchFn = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("Chromium distribution 'chrome' is not found"))
+			.mockRejectedValueOnce(new Error("Chromium distribution 'msedge' is not found"))
+			.mockResolvedValueOnce(browser);
+		const mockImport = vi.fn().mockResolvedValue({
+			chromium: { launch: launchFn },
+		});
+
+		await launchPlaywright({ headless: false, cdpPort: null, _import: mockImport });
+
+		expect(launchFn).toHaveBeenNthCalledWith(1, { headless: false, args: [], channel: "chrome" });
+		expect(launchFn).toHaveBeenNthCalledWith(2, { headless: false, args: [], channel: "msedge" });
+		expect(launchFn).toHaveBeenNthCalledWith(3, { headless: false, args: [] });
 	});
 
 	it("throws when import fails", async () => {
@@ -278,7 +313,7 @@ describe("launchPuppeteer", () => {
 
 		await launchPuppeteer({ headless: true, cdpPort: null, _import: mockImport });
 
-		expect(launchFn).toHaveBeenCalledWith({ headless: true, args: [] });
+		expect(launchFn).toHaveBeenCalledWith({ headless: true, args: [], channel: "chrome" });
 	});
 
 	it("passes CDP args when cdpPort specified", async () => {
@@ -293,6 +328,7 @@ describe("launchPuppeteer", () => {
 		expect(launchFn).toHaveBeenCalledWith({
 			headless: false,
 			args: ["--remote-debugging-port=3000", "--remote-debugging-address=127.0.0.1"],
+			channel: "chrome",
 		});
 	});
 
@@ -304,6 +340,22 @@ describe("launchPuppeteer", () => {
 
 		const session = await launchPuppeteer({ headless: false, cdpPort: null, _import: mockImport });
 		expect(session.engine).toBe("puppeteer");
+	});
+
+	it("falls back to Puppeteer-managed Chrome when system Chrome missing", async () => {
+		const { browser } = createMockBrowser();
+		const launchFn = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("Could not find Chrome"))
+			.mockResolvedValueOnce(browser);
+		const mockImport = vi.fn().mockResolvedValue({
+			default: { launch: launchFn },
+		});
+
+		await launchPuppeteer({ headless: false, cdpPort: null, _import: mockImport });
+
+		expect(launchFn).toHaveBeenNthCalledWith(1, { headless: false, args: [], channel: "chrome" });
+		expect(launchFn).toHaveBeenNthCalledWith(2, { headless: false, args: [] });
 	});
 
 	it("throws when import fails", async () => {
@@ -370,6 +422,7 @@ describe("launchEngine", () => {
 		expect(launchFn).toHaveBeenCalledWith({
 			headless: false,
 			args: ["--remote-debugging-port=9222", "--remote-debugging-address=127.0.0.1"],
+			channel: "chrome",
 		});
 	});
 
@@ -382,6 +435,6 @@ describe("launchEngine", () => {
 
 		await launchEngine("playwright", { _import: mockImport });
 
-		expect(launchFn).toHaveBeenCalledWith({ headless: false, args: [] });
+		expect(launchFn).toHaveBeenCalledWith({ headless: false, args: [], channel: "chrome" });
 	});
 });

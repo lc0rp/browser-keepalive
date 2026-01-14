@@ -16,7 +16,10 @@ pnpm install
 
 # Install a browser engine (pick one):
 pnpm install playwright && npx playwright install chromium
-# or: pnpm install puppeteer
+# or:
+pnpm install puppeteer
+# (if Puppeteer can't find a browser, install Chrome for Testing)
+pnpm exec puppeteer browsers install chrome
 ```
 
 > **npm/yarn users:** substitute your preferred package manager.
@@ -62,7 +65,7 @@ node src/cli.js https://example.com --auto-install -y
 | `--always-reset` | Always navigate to original URL instead of refreshing current page |
 | `--only-if-idle` | Wait for browser to be idle for the full interval before refreshing |
 | `-p, --cdp-port <port>` | Enable [Chrome DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/) (CDP) on this port |
-| `--auto-install` | Prompt to install engine/chromium browser, if not found |
+| `--auto-install` | Prompt to install engine and required browser binaries (Playwright: Chromium, Puppeteer: Chrome) |
 | `-y, --yes` | Auto-confirm prompts |
 | `-V, --version` | Show version |
 | `-h, --help` | Show help |
@@ -130,6 +133,8 @@ pnpm build
 - `--cache-bust` changes the query param each refresh to bypass caches.
 - `--only-if-idle` waits for no network activity before refreshing — can delay indefinitely on busy pages.
 - `--always-reset` navigates to the original URL; without it, the *current* page URL is refreshed (useful if you navigate manually).
+- `--engine playwright`: tries system Chrome then system Edge (`channel: 'chrome'` → `'msedge'`), then falls back to Playwright-managed Chromium.
+- `--engine puppeteer`: tries system Chrome (`channel: 'chrome'`), then falls back to Puppeteer’s managed browser.
 
 ## License
 
