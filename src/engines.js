@@ -134,6 +134,9 @@ export async function launchPlaywright({ headless, cdpPort, _import = importModu
 	}
 
 	const args = buildChromiumArgs({ cdpPort });
+	if (!headless) {
+		args.push("--start-maximized");
+	}
 
 	const launch = async (channel) => {
 		const opts = { headless, args };
@@ -160,7 +163,7 @@ export async function launchPlaywright({ headless, cdpPort, _import = importModu
 		browser = await launch(null);
 	}
 
-	const context = await browser.newContext();
+	const context = await browser.newContext(!headless ? { viewport: null } : {});
 	const page = await context.newPage();
 
 	return createSession("playwright", page, browser, cdpPort);
@@ -187,9 +190,15 @@ export async function launchPuppeteer({ headless, cdpPort, _import = importModul
 	}
 
 	const args = buildChromiumArgs({ cdpPort });
+	if (!headless) {
+		args.push("--start-maximized");
+	}
 
 	const launch = async (channel) => {
 		const opts = { headless, args };
+		if (!headless) {
+			opts.defaultViewport = null;
+		}
 		if (channel) {
 			opts.channel = channel;
 		}

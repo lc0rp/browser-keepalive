@@ -234,7 +234,11 @@ describe("launchPlaywright", () => {
 
 		expect(launchFn).toHaveBeenCalledWith({
 			headless: false,
-			args: ["--remote-debugging-port=9222", "--remote-debugging-address=127.0.0.1"],
+			args: [
+				"--remote-debugging-port=9222",
+				"--remote-debugging-address=127.0.0.1",
+				"--start-maximized",
+			],
 			channel: "chrome",
 		});
 	});
@@ -251,8 +255,16 @@ describe("launchPlaywright", () => {
 
 		await launchPlaywright({ headless: false, cdpPort: null, _import: mockImport });
 
-		expect(launchFn).toHaveBeenNthCalledWith(1, { headless: false, args: [], channel: "chrome" });
-		expect(launchFn).toHaveBeenNthCalledWith(2, { headless: false, args: [], channel: "msedge" });
+		expect(launchFn).toHaveBeenNthCalledWith(1, {
+			headless: false,
+			args: ["--start-maximized"],
+			channel: "chrome",
+		});
+		expect(launchFn).toHaveBeenNthCalledWith(2, {
+			headless: false,
+			args: ["--start-maximized"],
+			channel: "msedge",
+		});
 	});
 
 	it("falls back to Playwright-managed Chromium when no system browser found", async () => {
@@ -268,9 +280,20 @@ describe("launchPlaywright", () => {
 
 		await launchPlaywright({ headless: false, cdpPort: null, _import: mockImport });
 
-		expect(launchFn).toHaveBeenNthCalledWith(1, { headless: false, args: [], channel: "chrome" });
-		expect(launchFn).toHaveBeenNthCalledWith(2, { headless: false, args: [], channel: "msedge" });
-		expect(launchFn).toHaveBeenNthCalledWith(3, { headless: false, args: [] });
+		expect(launchFn).toHaveBeenNthCalledWith(1, {
+			headless: false,
+			args: ["--start-maximized"],
+			channel: "chrome",
+		});
+		expect(launchFn).toHaveBeenNthCalledWith(2, {
+			headless: false,
+			args: ["--start-maximized"],
+			channel: "msedge",
+		});
+		expect(launchFn).toHaveBeenNthCalledWith(3, {
+			headless: false,
+			args: ["--start-maximized"],
+		});
 	});
 
 	it("throws when import fails", async () => {
@@ -327,7 +350,12 @@ describe("launchPuppeteer", () => {
 
 		expect(launchFn).toHaveBeenCalledWith({
 			headless: false,
-			args: ["--remote-debugging-port=3000", "--remote-debugging-address=127.0.0.1"],
+			args: [
+				"--remote-debugging-port=3000",
+				"--remote-debugging-address=127.0.0.1",
+				"--start-maximized",
+			],
+			defaultViewport: null,
 			channel: "chrome",
 		});
 	});
@@ -354,8 +382,17 @@ describe("launchPuppeteer", () => {
 
 		await launchPuppeteer({ headless: false, cdpPort: null, _import: mockImport });
 
-		expect(launchFn).toHaveBeenNthCalledWith(1, { headless: false, args: [], channel: "chrome" });
-		expect(launchFn).toHaveBeenNthCalledWith(2, { headless: false, args: [] });
+		expect(launchFn).toHaveBeenNthCalledWith(1, {
+			headless: false,
+			args: ["--start-maximized"],
+			defaultViewport: null,
+			channel: "chrome",
+		});
+		expect(launchFn).toHaveBeenNthCalledWith(2, {
+			headless: false,
+			args: ["--start-maximized"],
+			defaultViewport: null,
+		});
 	});
 
 	it("throws when import fails", async () => {
@@ -421,7 +458,11 @@ describe("launchEngine", () => {
 
 		expect(launchFn).toHaveBeenCalledWith({
 			headless: false,
-			args: ["--remote-debugging-port=9222", "--remote-debugging-address=127.0.0.1"],
+			args: [
+				"--remote-debugging-port=9222",
+				"--remote-debugging-address=127.0.0.1",
+				"--start-maximized",
+			],
 			channel: "chrome",
 		});
 	});
@@ -435,6 +476,10 @@ describe("launchEngine", () => {
 
 		await launchEngine("playwright", { _import: mockImport });
 
-		expect(launchFn).toHaveBeenCalledWith({ headless: false, args: [], channel: "chrome" });
+		expect(launchFn).toHaveBeenCalledWith({
+			headless: false,
+			args: ["--start-maximized"],
+			channel: "chrome",
+		});
 	});
 });
