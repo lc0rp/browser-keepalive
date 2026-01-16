@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, createWriteStream } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
@@ -27,6 +27,11 @@ const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf-
 
 const program = new Command();
 
+function collectList(value, previous) {
+	if (!value) return previous ?? [];
+	return [...(previous ?? []), value];
+}
+
 program
 	.name("browser-keepalive")
 	.description("Launch a browser, load a URL, and periodically refresh it to keep it alive.")
@@ -46,6 +51,15 @@ program
 	)
 	.option("-p, --cdp-port <port>", "Enable Chrome DevTools Protocol on this port")
 	.option("--only-if-idle", "Only refresh when browser has been idle for the full interval")
+	.option("--record-network <path>", "Write NDJSON network log to this path")
+	.option(
+		"--record-include <substr>",
+		"Only record responses whose URL includes this substring (repeatable)",
+		collectList,
+		[]
+	)
+	.option("--record-max-bytes <bytes>", "Max response body bytes to store per entry", "1000000")
+	.option("--no-record-body", "Do not include response bodies in network log")
 	.option("-y, --yes", "Auto-confirm all prompts (for scripts)")
 	.addHelpText(
 		"after",
@@ -79,11 +93,26 @@ try {
 		userDataDir: String(opts.userDataDir || "").trim(),
 		cdpPort: normalizeCdpPort(opts.cdpPort),
 		onlyIfIdle: opts.onlyIfIdle || false,
+		recordNetworkPath: opts.recordNetwork ? String(opts.recordNetwork).trim() : null,
+		recordIncludes: Array.isArray(opts.recordInclude)
+			? opts.recordInclude.map((value) => String(value)).filter(Boolean)
+			: [],
+		recordMaxBytes: parsePositiveInt(opts.recordMaxBytes, "--record-max-bytes") ?? 1000000,
+		recordBody: opts.recordBody !== false,
 		yes: opts.yes || false,
 	};
 } catch (err) {
 	console.error(`Error: ${err.message}`);
 	process.exit(1);
+}
+
+function parsePositiveInt(value, label) {
+	if (value === undefined || value === null || value === "") return null;
+	const n = Number(value);
+	if (!Number.isInteger(n) || n <= 0) {
+		throw new Error(`${label} must be a positive integer`);
+	}
+	return n;
 }
 
 function commandExists(cmd) {
@@ -240,6 +269,130 @@ function ensureDir(dir) {
 	}
 }
 
+function shouldRecordBody(contentType) {
+	if (!contentType) return true;
+	const ct = contentType.toLowerCase();
+	return (
+		ct.includes("json") ||
+		ct.includes("text") ||
+		ct.includes("javascript") ||
+		ct.includes("xml") ||
+		ct.includes("html") ||
+		ct.includes("form")
+	);
+}
+
+function getHeader(headers, name) {
+	if (!headers) return "";
+	const key = name.toLowerCase();
+	return headers[key] ?? headers[name] ?? "";
+}
+
+function startNetworkRecorder(page, options) {
+	const recordPath = options.recordNetworkPath;
+	if (!recordPath) return null;
+
+	ensureDir(dirname(recordPath));
+
+	const includes = options.recordIncludes ?? [];
+	const recordBody = options.recordBody !== false;
+	const maxBytes = options.recordMaxBytes ?? 1000000;
+	const stream = createWriteStream(recordPath, { flags: "a" });
+
+	const shouldIncludeUrl = (url) =>
+		!includes.length || includes.some((needle) => needle && url.includes(needle));
+
+	const writeEntry = (entry) => {
+		try {
+			stream.write(`${JSON.stringify(entry)}\n`);
+		} catch {
+			// ignore
+		}
+	};
+
+	const onResponse = async (response) => {
+		try {
+			const url = typeof response.url === "function" ? response.url() : response.url;
+			if (!url) return;
+			const urlString = String(url);
+			if (!shouldIncludeUrl(urlString)) return;
+
+			const request = typeof response.request === "function" ? response.request() : null;
+			const method = request && typeof request.method === "function" ? request.method() : request?.method;
+			const status = typeof response.status === "function" ? response.status() : response.status;
+
+			const responseHeaders =
+				typeof response.headers === "function" ? response.headers() : response.headers;
+			const contentType = String(getHeader(responseHeaders, "content-type") ?? "");
+
+			let body = null;
+			let bodyTruncated = false;
+			let bodyError = null;
+			if (recordBody && shouldRecordBody(contentType)) {
+				try {
+					let text = await response.text();
+					if (typeof text !== "string") text = text ? String(text) : "";
+					if (maxBytes && text.length > maxBytes) {
+						bodyTruncated = true;
+						text = text.slice(0, maxBytes);
+					}
+					body = text;
+				} catch (err) {
+					bodyError = err?.message ?? String(err ?? "");
+				}
+			}
+
+			let requestPostData = null;
+			if (request && typeof request.postData === "function") {
+				try {
+					requestPostData = request.postData();
+				} catch {
+					requestPostData = null;
+				}
+			} else if (request?.postData) {
+				requestPostData = request.postData;
+			}
+			if (typeof requestPostData === "string" && maxBytes && requestPostData.length > maxBytes) {
+				requestPostData = requestPostData.slice(0, maxBytes);
+			}
+
+			writeEntry({
+				ts: new Date().toISOString(),
+				url: urlString,
+				method: method ?? "GET",
+				status,
+				contentType,
+				body,
+				bodyTruncated,
+				bodyError,
+				requestPostData,
+			});
+		} catch (err) {
+			writeEntry({
+				ts: new Date().toISOString(),
+				error: err?.message ?? String(err ?? ""),
+			});
+		}
+	};
+
+	page.on("response", onResponse);
+
+	return {
+		stop() {
+			try {
+				page.off("response", onResponse);
+			} catch {
+				// ignore
+			}
+			try {
+				stream.end();
+			} catch {
+				// ignore
+			}
+		},
+	};
+}
+
 async function launchWithOptionalInstall({ engine, headless, autoInstall, userDataDir, cdpPort }) {
 	try {
 		return await launchEngine(engine, { headless, userDataDir, cdpPort });
@@ -369,10 +522,19 @@ async function main() {
 	};
 	registerActivityTracking(session.page, markActivity);
 
+	const recorder = startNetworkRecorder(session.page, config);
+	if (recorder) {
+		const includeLabel = config.recordIncludes.length ? config.recordIncludes.join(",") : "all";
+		console.info(
+			`[keepalive] network log: ${config.recordNetworkPath} (include=${includeLabel} body=${config.recordBody} maxBytes=${config.recordMaxBytes})`
+		);
+	}
+
 	const stop = async (reason) => {
 		if (stopped) return;
 		stopped = true;
 		console.info(`[keepalive] stopping (${reason})...`);
+		if (recorder) recorder.stop();
 		await session.close();
 		process.exit(0);
 	};

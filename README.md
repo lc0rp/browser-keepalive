@@ -48,6 +48,11 @@ node src/cli.js https://example.com --no-cache-bust
 # Enable CDP so another app can control the browser
 node src/cli.js https://example.com -p 9222
 
+# Record network responses to NDJSON (optional filters)
+node src/cli.js https://example.com \
+  --record-network ~/.browser-keepalive/logs/owa.ndjson \
+  --record-include outlook.office.com
+
 # Auto-install missing engine (use -y to skip prompts)
 node src/cli.js https://example.com --auto-install -y
 ```
@@ -64,6 +69,10 @@ node src/cli.js https://example.com --auto-install -y
 | `--no-cache-bust` | Disable cache busting |
 | `--always-reset` | Always navigate to original URL instead of refreshing current page |
 | `--only-if-idle` | Wait for browser to be idle for the full interval before refreshing |
+| `--record-network <path>` | Write NDJSON network log to this path |
+| `--record-include <substr>` | Only record responses whose URL includes this substring (repeatable) |
+| `--record-max-bytes <bytes>` | Max response body bytes to store per entry |
+| `--no-record-body` | Do not include response bodies in the log |
 | `-p, --cdp-port <port>` | Enable [Chrome DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/) (CDP) on this port |
 | `--auto-install` | Prompt to install engine and required browser binaries (Playwright: Chromium, Puppeteer: Chrome) |
 | `-y, --yes` | Auto-confirm prompts |
@@ -132,6 +141,7 @@ pnpm build
 - Refreshes are sequential (never overlapping).
 - `--cache-bust` changes the query param each refresh to bypass caches.
 - `--only-if-idle` waits for no network activity before refreshing — can delay indefinitely on busy pages.
+- `--record-network` can capture sensitive data; use `--no-record-body` or rotate logs if needed.
 - `--always-reset` navigates to the original URL; without it, the *current* page URL is refreshed (useful if you navigate manually).
 - `--engine playwright`: tries system Chrome then system Edge (`channel: 'chrome'` → `'msedge'`), then falls back to Playwright-managed Chromium.
 - `--engine puppeteer`: tries system Chrome (`channel: 'chrome'`), then falls back to Puppeteer’s managed browser.
